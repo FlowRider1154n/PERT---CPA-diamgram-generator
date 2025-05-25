@@ -1,96 +1,84 @@
 <template>
   <div class="container">
-    <h1>🎯 PERT Network Diagram</h1>
+    <HomeView v-if="currentView === 'home'" @create-new="handleCreateNew" />
 
-    <div class="network-container" ref="networkContainerRef">
-      <!-- Nodes -->
-      <NetworkNode
-        v-for="(node, nodeId) in nodeLayout"
-        :key="nodeId"
-        :node-id="nodeId"
-        :config="node"
-        :is-critical="criticalNodes.includes(nodeId)"
-      />
+    <TypeSelection
+      v-if="currentView === 'selectType'"
+      @type-selected="handleTypeSelected"
+      @back="currentView = 'home'"
+    />
 
-      <!-- Activity Boxes -->
-      <ActivityBox
-        v-for="(activityDetails, activityName) in activityLayout"
-        :key="activityName"
-        :activity-name="activityName"
-        :layout="activityDetails"
-        :activity-data="activities[activityName]"
-        :is-critical="criticalPath.includes(activityName)"
-        @show-tooltip="handleShowTooltip"
-        @hide-tooltip="handleHideTooltip"
-      />
+    <DataInputTable
+      v-if="currentView === 'dataInput'"
+      :diagram-type="selectedDiagramType"
+      @generate-diagram="handleGenerateDiagram"
+      @back="currentView = 'selectType'"
+    />
 
-      <!-- Arrows (Main activity arrows) -->
-      <NetworkArrow
-        v-for="(activityDetails, activityName) in activityLayout"
-        :key="`arrow-${activityName}`"
-        :from-node="nodeLayout[activityDetails.from]"
-        :to-node="nodeLayout[activityDetails.to]"
-        :is-critical="criticalPath.includes(activityName)"
-        :arrow-type="'activity'"
-      />
+    <div v-if="currentView === 'viewDiagram' && projectData">
+      <button @click="startNewDiagram" class="back-button">Create Another Diagram</button>
+      <h1>🎯 {{ selectedDiagramType }} Network Diagram</h1>
+      <div class="network-container" ref="networkContainerRef">
+        <NetworkNode
+          v-for="(node, nodeId) in projectData.nodeLayout"
+          :key="nodeId"
+          :node-id="nodeId"
+          :config="node"
+          :is-critical="projectData.criticalNodes.includes(nodeId)"
+        />
+        <ActivityBox
+          v-for="(activityDetails, activityName) in projectData.activityLayout"
+          :key="activityName"
+          :activity-name="activityName"
+          :layout="activityDetails"
+          :activity-data="projectData.activities[activityName]"
+          :is-critical="projectData.criticalPath.includes(activityName)"
+          @show-tooltip="handleShowTooltip"
+          @hide-tooltip="handleHideTooltip"
+        />
+        <NetworkArrow
+          v-for="(activityDetails, activityName) in projectData.activityLayout"
+          :key="`arrow-${activityName}`"
+          :from-node="projectData.nodeLayout[activityDetails.from]"
+          :to-node="projectData.nodeLayout[activityDetails.to]"
+          :is-critical="projectData.criticalPath.includes(activityName)"
+          arrow-type="activity"
+        />
+        <!-- Add logic for dependency arrows if needed, more complex with dynamic data -->
+      </div>
 
-      <!-- Special Merge Arrows (if needed - careful with positioning) -->
-      <!-- Example: Arrow from A_END to C activity box -->
-      <NetworkArrow
-        v.if="nodeLayout.A_END && activityLayout.C"
-        :from-node="nodeLayout.A_END"
-        :to-pos="{ x: activityLayout.C.x, y: activityLayout.C.y }"
-        :is-critical="criticalPath.includes('A') && criticalPath.includes('C')"
-        :arrow-type="'dependency'"
-      />
-      <!-- Example: Arrow from F_END to H activity box -->
-      <NetworkArrow
-        v.if="nodeLayout.F_END && activityLayout.H"
-        :from-node="nodeLayout.F_END"
-        :to-pos="{ x: activityLayout.H.x, y: activityLayout.H.y }"
-        :is-critical="criticalPath.includes('F') && criticalPath.includes('H')"
-        :arrow-type="'dependency'"
-      />
-      <!-- Example: Arrow from G_END to H activity box -->
-      <NetworkArrow
-        v.if="nodeLayout.G_END && activityLayout.H"
-        :from-node="nodeLayout.G_END"
-        :to-pos="{ x: activityLayout.H.x, y: activityLayout.H.y }"
-        :is-critical="criticalPath.includes('G') && criticalPath.includes('H')"
-        :arrow-type="'dependency'"
-      />
-    </div>
-
-    <div class="legend">
-      <h3>📊 Legend</h3>
-      <div class="legend-grid">
-        <div class="legend-item">
-          <div class="legend-color" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
-          Normal Path Nodes
-        </div>
-        <div class="legend-item">
-          <div class="legend-color" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);"></div>
-          Critical Path Nodes
-        </div>
-        <div class="legend-item">
-          <div class="legend-color" style="background: #ff9ff3; border: 2px solid #ff9ff3;"></div>
-          Normal Activities
-        </div>
-        <div class="legend-item">
-          <div class="legend-color" style="background: #ffebee; border: 2px solid #ff4757;"></div>
-          Critical Activities
+      <div class="legend">
+        <h3>📊 Legend</h3>
+        <!-- Legend content (same as before) -->
+        <div class="legend-grid">
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);"></div>
+                Normal Path Nodes
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);"></div>
+                Critical Path Nodes
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ff9ff3; border: 2px solid #ff9ff3;"></div>
+                Normal Activities
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ffebee; border: 2px solid #ff4757;"></div>
+                Critical Activities
+            </div>
         </div>
       </div>
-    </div>
 
-    <div class="stats">
-      <StatCard label="Project Duration" :value="`${projectDuration.toFixed(2)} days`" />
-      <StatCard label="Critical Path" :value="criticalPath.join(' → ')" />
-      <StatCard label="Total Activities" :value="`${Object.keys(activities).length}`" />
-      <StatCard label="Critical Activities" :value="`${criticalPath.length} of ${Object.keys(activities).length}`" />
-    </div>
+      <div class="stats">
+        <StatCard label="Project Duration" :value="`${projectData.projectDuration.toFixed(2)} days`" />
+        <StatCard label="Critical Path" :value="projectData.criticalPath.join(' → ')" />
+        <StatCard label="Total Activities" :value="`${Object.keys(projectData.activities).length}`" />
+        <StatCard label="Critical Activities" :value="`${projectData.criticalPath.length} of ${Object.keys(projectData.activities).length}`" />
+      </div>
 
-    <ActivityTable :activities-data="data_corrected" :critical-path="criticalPath" />
+      <ActivityTable :activities-data="projectData.rawActivitiesForTable" :critical-path="projectData.criticalPath" :diagram-type="selectedDiagramType"/>
+    </div>
 
     <Tooltip
       v-if="tooltip.visible"
@@ -102,150 +90,151 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
+import { ref, computed, nextTick } from 'vue';
+import HomeView from './components/HomeView.vue';
+import TypeSelection from './components/TypeSelection.vue';
+import DataInputTable from './components/DataInputTable.vue';
 import NetworkNode from './components/NetworkNode.vue';
 import ActivityBox from './components/ActivityBox.vue';
 import NetworkArrow from './components/NetworkArrow.vue';
 import StatCard from './components/StatCard.vue';
-import ActivityTable from './components/ActivityTable.vue';
+import ActivityTable from './components/ActivityTable.vue'; // Modified to accept diagramType
 import Tooltip from './components/Tooltip.vue';
 
-// --- DATA (Same as original) ---
-const data_corrected = {
-    "Activity": ["A", "B", "C", "D", "E", "F", "G", "H"],
-    "Immediate Predecessors": ["-", "A", "A,B", "C", "C", "D,E", "D", "F,G"],
-    "Optimistic": [3, 1, 4, 6, 3, 2, 7, 12],
-    "Most Likely": [5, 3, 5, 8, 4, 4, 9, 15],
-    "Pessimistic": [7, 4, 7, 9, 5, 7, 10, 17],
-    "Expected Time": [5.00, 2.83, 5.16, 7.83, 4.00, 4.16, 8.83, 14.83],
-    "Variance": [0.444, 0.250, 0.250, 0.250, 0.111, 0.694, 0.250, 0.694]
+import { useNetworkCalculator } from './composables/useNetworkCalculator';
+import { generateLayout } from './utils/layoutGenerator'; // Uses d3-dag now
+
+const currentView = ref('home'); // 'home', 'selectType', 'dataInput', 'viewDiagram'
+const selectedDiagramType = ref(null); // 'PERT' or 'CPA'
+const projectData = ref(null); // Will hold all calculated data for the diagram
+const initialActivitiesInput = ref(null); // To store the input if we need to revert
+const { calculateNetworkMetrics } = useNetworkCalculator();
+
+const handleCreateNew = () => {
+  currentView.value = 'selectType';
+  projectData.value = null; // Clear previous data
 };
 
-const activities = ref({});
-data_corrected.Activity.forEach((activity, i) => {
-    activities.value[activity] = {
-        predecessors: data_corrected["Immediate Predecessors"][i] === "-" ? [] :
-                        data_corrected["Immediate Predecessors"][i].split(","),
-        optimistic: data_corrected.Optimistic[i],
-        mostLikely: data_corrected["Most Likely"][i],
-        pessimistic: data_corrected.Pessimistic[i],
-        expectedTime: data_corrected["Expected Time"][i],
-        variance: data_corrected.Variance[i]
+const handleTypeSelected = (type) => {
+  selectedDiagramType.value = type;
+  currentView.value = 'dataInput';
+};
+
+const handleGenerateDiagram = async (activitiesInputFromTable) => {
+  // Store the input in case of error, so DataInputTable can be repopulated if needed
+  // (Though DataInputTable already holds its own state, this is a fallback/alternative)
+  initialActivitiesInput.value = JSON.parse(JSON.stringify(activitiesInputFromTable)); 
+  
+  try {
+    // Reset projectData before attempting to generate a new one
+    // This ensures that if an error occurs, we don't show a partially updated diagram
+    // from a previous successful attempt.
+    projectData.value = null; 
+
+    const { activities, networkAnalysis, rawActivitiesForTable } = calculateNetworkMetrics(activitiesInputFromTable, selectedDiagramType.value);
+    
+    const { nodeLayout, activityLayout, arrowDefinitions, dagRenderWidth, dagRenderHeight } = 
+        generateLayout(activities, networkAnalysis.dependencies, networkAnalysis.levels);
+
+    projectData.value = {
+      activities,
+      nodeLayout,
+      activityLayout,
+      arrowDefinitions,
+      criticalPath: networkAnalysis.criticalPath,
+      criticalNodes: getCriticalNodes(activities, networkAnalysis.criticalPath, nodeLayout),
+      projectDuration: networkAnalysis.projectDuration,
+      rawActivitiesForTable,
+      dagRenderWidth,
+      dagRenderHeight
     };
-});
 
-const criticalPath = ref(['A', 'C', 'D', 'G', 'H']);
+    // Only change view if everything is successful
+    currentView.value = 'viewDiagram'; 
+    await nextTick();
+    animateDiagramElements();
 
-const nodeLayout = ref({
-    'START': { x: 60, y: 300, es: 0, ef: 0, label: '1' },
-    'A_END': { x: 220, y: 300, es: 0, ef: 5.00, label: '2' },
-    'B_END': { x: 380, y: 200, es: 5.00, ef: 7.83, label: '3' }, // A (5) + B (2.83) = 7.83. Node represents end of B.
-    'C_END': { x: 540, y: 300, es: 7.83, ef: 12.99, label: '4' }, // Max(A_END, B_END) + C. If C depends on A and B, it starts after both. B_END is later. 7.83 + 5.16 = 12.99. Node represents end of C.
-    'DE_MERGE': { x: 700, y: 250, es: 12.99, ef: 20.82, label: '5' }, // C_END + D (7.83) = 20.82. Represents end of D. Also end of E (12.99+4=16.99). D is longer.
-    'F_END': { x: 820, y: 180, es: 20.82, ef: 24.98, label: '6' }, // DE_MERGE + F (4.16) = 24.98. Node for end of F.
-    'G_END': { x: 820, y: 350, es: 20.82, ef: 29.65, label: '7' }, // DE_MERGE + G (8.83) = 29.65. Node for end of G.
-    'END': { x: 980, y: 300, es: 29.65, ef: 44.48, label: '8' }  // Max(F_END, G_END) + H. G_END is later (29.65). 29.65 + 14.83 = 44.48.
-});
-// Corrected EF for END node based on Critical Path: A(5) C(5.16) D(7.83) G(8.83) H(14.83) = 41.65 (This is if no B involved in critical path for C start)
-// If Critical Path is A -> C -> D -> G -> H
-// Start: 0
-// A_END: 0 + 5 = 5 (ES=0, EF=5)
-// C_END: A_END is 5. B_END requires A, so B starts at 5, ends at 5+2.83 = 7.83. C starts after max(A_END, B_END) which is 7.83. C_END = 7.83 + 5.16 = 12.99 (ES for C is 7.83, EF for C is 12.99)
-// DE_MERGE (End of D): C_END + D_time = 12.99 + 7.83 = 20.82 (ES for D is 12.99, EF for D is 20.82)
-// G_END: DE_MERGE + G_time = 20.82 + 8.83 = 29.65 (ES for G is 20.82, EF for G is 29.65)
-// END (End of H): G_END + H_time = 29.65 + 14.83 = 44.48 (ES for H is 29.65, EF for H is 44.48).
-// The project duration in stats says 44.82, likely a slight rounding difference or different calculation. Let's use 44.48 based on sum of critical path activities.
-// The provided nodeLayout seems to reflect this critical path calculation. The EF of END node should be 44.48.
-// The original HTML has `END: { x: 980, y: 300, es: 29.99, ef: 44.82, label: '8' }`. The ES 29.99 vs 29.65 is a slight diff.
-// Let's stick to the given nodeLayout for now, but be aware of calculation.
-nodeLayout.value['END'].ef = 44.48; // Recalculated
-nodeLayout.value['END'].es = 29.65; // Recalculated from G_END
-// The critical path implies G_END is the predecessor to H. So ES for H = EF of G_END = 29.65.
+  } catch (error) {
+    console.error("Error generating diagram:", error);
+    alert(`Error generating diagram: ${error.message}. Please check your input data and console for details.`);
+    // IMPORTANT: Do NOT change currentView.value here. User stays on DataInputTable.
+    // The DataInputTable component already holds the user's current input in its 'activities' ref.
+    // So, the data is not lost from the input fields.
+    projectData.value = null; // Ensure no stale diagram data is shown
+  }
+};
 
+// Modified getCriticalNodes to use activities and their event nodes
+const getCriticalNodes = (allActivities, criticalPathActivities, allNodeLayout) => {
+    const criticalNodeIds = new Set();
+    if (allNodeLayout['___VIRTUAL_START___']) criticalNodeIds.add('___VIRTUAL_START___');
 
-const activityLayout = ref({
-    'A': { x: 140, y: 270, from: 'START', to: 'A_END' },
-    'B': { x: 300, y: 170, from: 'A_END', to: 'B_END' }, // B depends on A
-    'C': { x: 430, y: 230, from: 'B_END', to: 'C_END' }, // C depends on A,B. B_END is later.
-    'D': { x: 620, y: 330, from: 'C_END', to: 'DE_MERGE' }, // D depends on C
-    'E': { x: 620, y: 200, from: 'C_END', to: 'DE_MERGE' }, // E depends on C. DE_MERGE is effectively end of D or E. D is critical.
-    'F': { x: 760, y: 150, from: 'DE_MERGE', to: 'F_END' }, // F depends on D,E. DE_MERGE represents this.
-    'G': { x: 760, y: 380, from: 'DE_MERGE', to: 'G_END' }, // G depends on D. DE_MERGE represents end of D.
-    'H': { x: 900, y: 270, from: 'G_END', to: 'END' }      // H depends on F,G. G_END is on critical path.
-});
-
-// Adjust H's 'from' based on critical path (G is critical, F is not)
-// H depends on F,G. G_END (29.65) vs F_END (24.98). H starts after G.
-// So H's from node should be G_END. And 'END' node ES is EF of G_END. This seems correct.
-
-const criticalNodes = computed(() => {
-    // Determine critical nodes based on critical path activities and their start/end nodes
-    const nodes = new Set(['START']);
-    criticalPath.value.forEach(actName => {
-        const layout = activityLayout.value[actName];
-        if (layout) {
-            nodes.add(layout.from);
-            nodes.add(layout.to);
+    criticalPathActivities.forEach(actId => {
+        if (allActivities[actId] && allActivities[actId].isCritical) {
+            criticalNodeIds.add(`node_start_${actId}`);
+            criticalNodeIds.add(`node_end_${actId}`);
         }
     });
-    return Array.from(nodes);
-});
+     if (allNodeLayout['___VIRTUAL_END___']) { // Add if any critical path leads to it
+        const lastCriticalActivityId = criticalPathActivities[criticalPathActivities.length - 1];
+        if (lastCriticalActivityId && allActivities[lastCriticalActivityId]?.successors.length === 0) {
+            criticalNodeIds.add('___VIRTUAL_END___');
+        }
+    }
+    return Array.from(criticalNodeIds);
+};
 
-const projectDuration = computed(() => nodeLayout.value['END'].ef);
 
+const startNewDiagram = () => {
+  currentView.value = 'home';
+  projectData.value = null;
+  selectedDiagramType.value = null;
+};
 
-// --- TOOLTIP ---
-const tooltip = ref({
-  visible: false,
-  content: '',
-  x: 0,
-  y: 0
-});
-
+// --- TOOLTIP (same as before) ---
+const tooltip = ref({ visible: false, content: '', x: 0, y: 0 });
 const handleShowTooltip = ({ event, activityName }) => {
-  const activity = activities.value[activityName];
-  if (!activity) return;
+  if (!projectData.value || !projectData.value.activities[activityName]) return;
+  const activity = projectData.value.activities[activityName];
   tooltip.value = {
     visible: true,
     content: `
       <strong>Activity ${activityName}</strong><br>
       Predecessors: ${activity.predecessors.length ? activity.predecessors.join(', ') : 'None'}<br>
+      ES: ${activity.es.toFixed(2)}, EF: ${activity.ef.toFixed(2)}<br>
+      LS: ${activity.ls.toFixed(2)}, LF: ${activity.lf.toFixed(2)}<br>
+      Slack: ${activity.slack.toFixed(2)}<br>
       Expected Time: ${activity.expectedTime.toFixed(2)} days<br>
-      Std Dev: ${Math.sqrt(activity.variance).toFixed(3)}<br>
-      ${criticalPath.value.includes(activityName) ? '<strong>🔴 CRITICAL PATH</strong>' : '⚪ Non-critical'}
+      ${selectedDiagramType.value === 'PERT' ? `Variance: ${activity.variance.toFixed(3)}<br>` : ''}
+      ${projectData.value.criticalPath.includes(activityName) ? '<strong>🔴 CRITICAL PATH</strong>' : '⚪ Non-critical'}
     `,
     x: event.pageX + 15,
-    y: event.pageY - 80 // Adjust as needed
+    y: event.pageY - 100 // Adjust as needed
   };
 };
+const handleHideTooltip = () => { tooltip.value.visible = false; };
 
-const handleHideTooltip = () => {
-  tooltip.value.visible = false;
-};
-
-// --- ANIMATION ON LOAD ---
+// --- ANIMATION ---
 const networkContainerRef = ref(null);
-onMounted(() => {
-  // Simple fade-in/scale-up, Vue transitions are better for complex animations
-  setTimeout(() => {
-    if (networkContainerRef.value) {
-      const elements = networkContainerRef.value.querySelectorAll('.node, .activity-box');
-      elements.forEach((el, index) => {
-        el.style.opacity = '0';
-        el.style.transform = 'scale(0.5)';
-        setTimeout(() => {
-          el.style.transition = 'all 0.5s ease';
-          el.style.opacity = '1';
-          el.style.transform = 'scale(1)';
-        }, index * 50); // Stagger animation
-      });
-    }
-  }, 100);
-});
+const animateDiagramElements = () => {
+  if (networkContainerRef.value) {
+    const elements = networkContainerRef.value.querySelectorAll('.node, .activity-box');
+    elements.forEach((el, index) => {
+      el.style.opacity = '0';
+      el.style.transform = 'scale(0.5)';
+      setTimeout(() => {
+        el.style.transition = 'all 0.5s ease';
+        el.style.opacity = '1';
+        el.style.transform = 'scale(1)';
+      }, index * 50);
+    });
+  }
+};
 
 </script>
 
 <style>
+
 /* Global styles from original HTML - place non-scoped styles here */
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -277,15 +266,15 @@ h1 {
 
 .network-container {
     position: relative;
-    width: 100%;
-    /* Adjust height based on your content or make it dynamic */
-    height: 700px; 
+    /* width: 100%; REMOVE or keep if you want scrollbars for very large d3-dag outputs */
+    /* height: 700px; REMOVE or keep if you want scrollbars */
     margin: 20px 0;
     background: linear-gradient(45deg, #f8f9ff 0%, #e6f3ff 100%);
     border: 2px solid #e1e8ed;
     border-radius: 15px;
-    overflow: hidden; /* Important if elements are positioned absolutely */
+    overflow: auto; /* Add scrollbars if minWidth/minHeight from d3-dag is larger than available space */
     box-shadow: inset 0 4px 8px rgba(0,0,0,0.05);
+    padding: 20px; /* Add some padding inside the container */
 }
 
 .legend {
